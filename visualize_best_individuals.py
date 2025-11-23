@@ -92,7 +92,7 @@ def visualize(generation_id):
             if vel is None or len(vel) == 0:
                 continue
 
-            best_step = round_to_checkpoint(int(np.argmax(vel)), 1000)
+            best_step = round_to_checkpoint(int(np.argmax(vel)), 10000)
 
             model_path = os.path.join(model_dir, f"SAC_{gen}_{counter}_{best_step}.zip")
             vec_path = os.path.join(vec_dir, f"{gen}_{counter}_{best_step}.pkl")
