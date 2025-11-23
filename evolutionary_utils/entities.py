@@ -96,7 +96,7 @@ class Individual:
         # save fitness score
         with open(self.fitness_file_path, "w") as outfile:
             serialized_dict = json.dumps(self.metrics_dict)
-            outfile.write(serialized_dict)
+            outfile.write(serialized_dict)      
         # save reward history
         # TODO: reward history to be dumped from the RL training code?
         # save model_checkpoint
