@@ -104,17 +104,10 @@ replaces manual fitness scores (maximum velocity, to fitness score via elo scori
 
 ## Run
 ```shell
-export ROOT_PATH='...'
+export ROOT_PATH='...' # path to main
 export OPENAI_API_KEY='<your openai key>'
 python main.py 
-
-*Note, we will soon release the AirSim environment setup script.*
-
-For AirSim, follow the instruction on this link [https://microsoft.github.io/AirSim/build_linux/](AirSim)
-```shell
-export AIRSIM_PATH='AirSim'
-export AIRSIMNH_PATH='AirSimNH/AirSimNH/LinuxNoEditor/AirSimNH.sh'
-```
+``
  
 ## Other Utilities
 * The prompts are listed in ```prompts``` folder.
