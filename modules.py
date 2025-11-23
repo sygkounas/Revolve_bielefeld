@@ -102,7 +102,7 @@ class RewardFunctionGeneration:
         operator_prompt = operator_prompt.replace(
             "\n\n<EXAMPLES>", in_context_samples_str
         )
-        operator_prompt = operator_prompt.replace("<EPISODES>", "100")
+       # operator_prompt = operator_prompt.replace("<EPISODES>", "100")
         print("Prepared in-context prompt for reward function generation.",operator_prompt)
         return operator_prompt
 
