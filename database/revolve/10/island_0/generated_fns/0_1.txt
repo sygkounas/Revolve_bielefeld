@@ -1,0 +1,146 @@
+def compute_reward(observation: np.ndarray) -> Tuple[float, Dict[str, float]]:
+    # -------------------------
+    # Parse observation indices
+    # -------------------------
+    # qpos (position) and qvel (velocity) segments
+    # position: indices 0..(nq-1), here first 24 (0..23) are root + joint positions
+    # velocity: indices 24..46 are root + joint velocities
+    torso_z = observation[0]          # z-position of torso center
+    torso_vel_x = observation[22]     # x-velocity of torso center (forward speed)
+    torso_vel_y = observation[23]     # lateral velocity of torso center
+    torso_omega = observation[25:28]  # angular velocities (x,y,z) of torso
+
+    # Joint angles (for "human-likeness" and posture)
+    abdomen_angles = observation[5:8]     # [abdomen_z, abdomen_y, abdomen_x]
+    right_hip_angles = observation[8:12]  # [rh_x, rh_z, rh_y, rknee]
+    left_hip_angles = observation[12:16]  # [lh_x, lh_z, lh_y, lknee]
+
+    # Joint angular velocities (to discourage jittery motion)
+    abdomen_avel = observation[28:31]
+    right_hip_avel = observation[31:35]
+    left_hip_avel = observation[35:39]
+
+    # Actuator forces: indices 271..293
+    actuator_forces = observation[271:294]
+
+    # --------------------------------
+    # 1. Forward running reward (main)
+    # --------------------------------
+    # Encourage large positive forward velocity, gently saturate with exp
+    speed = torso_vel_x
+    forward_temp = 1.5  # higher temp → slower saturation, keeps focus on speed
+    # Map speed to [0, 1): negative speeds get near-zero reward
+    r_forward_raw = max(speed, 0.0)
+    r_forward = 1.0 - np.exp(-r_forward_raw / forward_temp)
+
+    # ------------------------
+    # 2. Upright posture bonus
+    # ------------------------
+    # Healthy z in [1.0, 2.0]; encourage staying near center (1.5)
+    target_z = 1.5
+    z_error = abs(torso_z - target_z)
+    upright_temp = 0.15  # small temp → sharp penalty when deviating too much
+    # Exponential falloff with height error, clipped to [0,1]
+    r_upright = float(np.exp(-z_error / upright_temp))
+    r_upright = float(np.clip(r_upright, 0.0, 1.0))
+
+    # Also gently penalize large torso angular velocity (less flailing)
+    torso_omega_norm = np.linalg.norm(torso_omega)
+    torso_stability_temp = 5.0  # tolerate moderate angular velocities
+    r_torso_stability = float(np.exp(-torso_omega_norm / torso_stability_temp))
+    r_torso_stability = float(np.clip(r_torso_stability, 0.0, 1.0))
+
+    # Combine posture terms (still in [0,1])
+    r_posture = 0.7 * r_upright + 0.3 * r_torso_stability
+
+    # --------------------------------------
+    # 3. Human-like leg configuration bonus
+    # --------------------------------------
+    # Soft preference for moderate hip/knee flexion, avoiding extreme poses.
+    # Target: hips around 0, knees slightly bent (e.g. ~0.3 rad).
+    # This is heuristic and purely based on joint angles.
+    hip_targets = np.array([0.0, 0.0, 0.0])  # approximate neutral for hip axes
+    knee_target = 0.3
+
+    # Right leg: last entry of right_hip_angles is right_knee
+    right_hip = right_hip_angles[:3]
+    right_knee = right_hip_angles[3]
+    left_hip = left_hip_angles[:3]
+    left_knee = left_hip_angles[3]
+
+    # Quadratic distance from target configuration
+    def leg_pose_score(hip, knee):
+        hip_err = hip - hip_targets
+        knee_err = knee - knee_target
+        return float(np.linalg.norm(hip_err) + abs(knee_err))
+
+    right_leg_pose_err = leg_pose_score(right_hip, right_knee)
+    left_leg_pose_err = leg_pose_score(left_hip, left_knee)
+
+    leg_pose_temp = 1.0  # moderate; doesn't dominate but nudges toward normal gait
+    r_leg_pose = np.exp(-(right_leg_pose_err + left_leg_pose_err) / leg_pose_temp)
+    r_leg_pose = float(np.clip(r_leg_pose, 0.0, 1.0))
+
+    # Also discourage excessive joint angular velocities (less jitter, more fluid)
+    leg_avel_norm = float(
+        np.linalg.norm(abdomen_avel) +
+        np.linalg.norm(right_hip_avel) +
+        np.linalg.norm(left_hip_avel)
+    )
+    leg_smooth_temp = 20.0  # high so only very large velocities are penalized strongly
+    r_leg_smooth = np.exp(-leg_avel_norm / leg_smooth_temp)
+    r_leg_smooth = float(np.clip(r_leg_smooth, 0.0, 1.0))
+
+    r_human_like = 0.6 * r_leg_pose + 0.4 * r_leg_smooth
+
+    # -------------------------------
+    # 4. Energy / effort regularizer
+    # -------------------------------
+    # Penalize large actuator forces to reduce jerky, inefficient motion.
+    effort = float(np.linalg.norm(actuator_forces))
+    effort_temp = 150.0  # high so that only extreme efforts are strongly penalized
+    r_effort = np.exp(-effort / effort_temp)
+    r_effort = float(np.clip(r_effort, 0.0, 1.0))
+
+    # -----------------------------------
+    # 5. Lateral & sideways motion penalty
+    # -----------------------------------
+    # Penalize large lateral (y) speed to keep straight running.
+    lat_speed = abs(torso_vel_y)
+    lateral_temp = 1.0  # moderate; small lateral motion allowed
+    r_lateral = np.exp(-lat_speed / lateral_temp)
+    r_lateral = float(np.clip(r_lateral, 0.0, 1.0))
+
+    # -----------------------------
+    # 6. Combine into total reward
+    # -----------------------------
+    # All components are in [0,1] and non-contradictory:
+    # forward encourages speed, others shape posture/energy/lateral behavior.
+    w_forward = 0.55
+    w_posture = 0.15
+    w_human_like = 0.15
+    w_effort = 0.10
+    w_lateral = 0.05
+
+    total_reward = (
+        w_forward * r_forward +
+        w_posture * r_posture +
+        w_human_like * r_human_like +
+        w_effort * r_effort +
+        w_lateral * r_lateral
+    )
+
+    components: Dict[str, float] = {
+        "forward": r_forward,
+        "upright": r_upright,
+        "torso_stability": r_torso_stability,
+        "posture": r_posture,
+        "leg_pose": r_leg_pose,
+        "leg_smooth": r_leg_smooth,
+        "human_like": r_human_like,
+        "effort": r_effort,
+        "lateral": r_lateral,
+        "total": total_reward,
+    }
+
+    return float(total_reward), components

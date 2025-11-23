@@ -116,9 +116,9 @@ def train(
             CustomSACPolicy, env, verbose=1, device=device, tensorboard_log=log_dir
         )
 
-    TIMESTEPS = 500
-    # total_timesteps = 3000000
-    total_timesteps = 1000
+    TIMESTEPS = 1000
+    total_timesteps = 10000
+    #total_timesteps = 1000
 
     while current_timesteps < total_timesteps:
         model.learn(
@@ -135,6 +135,12 @@ def train(
             f"{sb3_algo}_{generation_id}_{counter}_{current_timesteps}.zip",
         )
         model.save(model_save_path)
+        vecnorm_path = os.path.join(
+            output_path,
+            f"island_{island_id}/vecnormalize/{generation_id}_{counter}_{current_timesteps}.pkl"
+        )
+        os.makedirs(os.path.dirname(vecnorm_path), exist_ok=True)
+        env.save(vecnorm_path)
         env.render()
 
 
@@ -189,5 +195,6 @@ def run_training(
         output_path,
         log_dir,
     )
+    
 
     # return velocity_filepath

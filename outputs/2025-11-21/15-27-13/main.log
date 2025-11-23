@@ -1,0 +1,25 @@
+[2025-11-21 15:27:13,167][absl][INFO] - Generation 0, Counter 0: island_id=0, type=<class 'int'>
+[2025-11-21 15:27:13,167][absl][INFO] - Designing reward function for counter 0
+[2025-11-21 15:27:47,537][httpx][INFO] - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-11-21 15:27:47,547][absl][INFO] - Valid reward function generated.
+[2025-11-21 15:27:47,548][absl][INFO] - Loading train cfg
+[2025-11-21 15:27:47,638][absl][INFO] - Training Config loaded
+[2025-11-21 15:27:47,638][absl][INFO] - Initializing TrainPolicy: generation_id=0, island_id=0, type(island_id)=<class 'int'>
+[2025-11-21 15:27:47,638][absl][INFO] - Generation 0, Counter 1: island_id=0, type=<class 'int'>
+[2025-11-21 15:27:47,638][absl][INFO] - Designing reward function for counter 1
+[2025-11-21 15:29:48,531][httpx][INFO] - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 500 Internal Server Error"
+[2025-11-21 15:29:48,533][openai._base_client][INFO] - Retrying request to /chat/completions in 0.448440 seconds
+[2025-11-21 15:30:28,140][httpx][INFO] - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-11-21 15:30:28,145][absl][INFO] - Valid reward function generated.
+[2025-11-21 15:30:28,147][absl][INFO] - Loading train cfg
+[2025-11-21 15:30:28,234][absl][INFO] - Training Config loaded
+[2025-11-21 15:30:28,234][absl][INFO] - Initializing TrainPolicy: generation_id=0, island_id=0, type(island_id)=<class 'int'>
+[2025-11-21 15:30:28,234][absl][INFO] - Training 2 policies in parallel.
+[2025-11-21 15:32:48,185][absl][INFO] - Policy training finished.
+[2025-11-21 15:32:48,185][absl][INFO] - Evaluating trained policies in parallel.
+[2025-11-21 15:32:53,966][absl][INFO] - Evaluation finished.
+[2025-11-21 15:32:53,966][absl][INFO] - Inside seed_islands: island_id=0, type=<class 'int'>, generation_id=0, counter_id=0
+[2025-11-21 15:32:53,966][absl][INFO] - Registering Individual with generation_id 0 | counter_id 0 in Island 0.
+[2025-11-21 15:32:53,967][absl][INFO] - Inside seed_islands: island_id=0, type=<class 'int'>, generation_id=0, counter_id=1
+[2025-11-21 15:32:53,967][absl][INFO] - Registering Individual with generation_id 0 | counter_id 1 in Island 0.
+[2025-11-21 15:32:53,969][absl][INFO] - Mutation | sampled island: 0

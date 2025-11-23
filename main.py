@@ -1,6 +1,6 @@
 import os
 import sys
-
+import traceback
 sys.path.append(os.environ["ROOT_PATH"])
 from rewards_database import RevolveDatabase, EurekaDatabase
 from modules import *
@@ -138,7 +138,9 @@ def main(cfg):
             baseline=cfg.evolution.baseline,
         )
 
-    for generation_id in range(0, cfg.evolution.num_generations):
+    #for generation_id in range(cfg.evolution.star_generation, cfg.evolution.num_generations):
+    for generation_id in range(1, 2):
+    
         # fix the temperature for sampling
         temperature = temp_scheduler(iteration=generation_id)
         print(

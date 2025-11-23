@@ -17,6 +17,7 @@ import hydra
 import openai
 from hydra.core.global_hydra import GlobalHydra
 from openai import OpenAI
+from typing import List, Tuple, Dict, Optional
 
 from rl_agent.evaluate import return_score
 # from rl_agent.generate_scores import generate_behaviour
@@ -30,33 +31,32 @@ client = OpenAI(api_key=openai_api_key)
 # generates reward functions
 class RewardFunctionGeneration:
     def __init__(self, system_prompt: str, env_input: str):
-        # TODO: change system message based on Eureka
         self.system_prompt = system_prompt
-        self.env_input = env_input  # env_class + task
-        self.llm = "gpt-4-1106-preview"
+        self.env_input = env_input
+        self.llm = "gpt-5.1"  # use the new model
 
     def query_llm(self, in_context_prompt: str) -> Tuple[str, int, int]:
-        response = client.chat.completions.create(
-            model=self.llm,  # gpt-4-1106-preview, gpt-3.5-turbo-1106
+        # New API: no temperature, no top_p, no penalties
+        resp = client.chat.completions.create(
+            model=self.llm,
             messages=[
                 {
                     "role": "system",
                     "content": self.system_prompt + "\n" + self.env_input,
                 },
-                {"role": "user", "content": f"{in_context_prompt}"},
+                {
+                    "role": "user",
+                    "content": in_context_prompt,
+                },
             ],
-            temperature=1,
-            max_tokens=4096,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
         )
 
-        return (
-            response.choices[0].message.content,
-            response.usage.prompt_tokens,
-            response.usage.completion_tokens,
-        )
+        # Extract content + token counts
+        out = resp.choices[0].message.content
+        prompt_tokens = resp.usage.prompt_tokens if resp.usage else 0
+        completion_tokens = resp.usage.completion_tokens if resp.usage else 0
+
+        return out, prompt_tokens, completion_tokens
 
     @staticmethod
     def prepare_in_context_prompt(
@@ -103,6 +103,7 @@ class RewardFunctionGeneration:
             "\n\n<EXAMPLES>", in_context_samples_str
         )
         operator_prompt = operator_prompt.replace("<EPISODES>", "100")
+        print("Prepared in-context prompt for reward function generation.",operator_prompt)
         return operator_prompt
 
     def generate_rf(self, in_context_prompt: str) -> str:

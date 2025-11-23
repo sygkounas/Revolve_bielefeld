@@ -1,0 +1,26 @@
+root_dir: ${oc.env:ROOT_PATH}
+tag: default
+debug: false
+database:
+  rewards_dir: ${root_dir}/database/${evolution.baseline}/${data_paths.run}
+  num_islands: 3
+  max_island_size: 10
+  crossover_prob: 0.5
+  migration_prob: 0.0
+  initial_temp: 1
+  final_temp: 1
+  num_gpus: 1
+evolution:
+  star_generation: 0
+  num_generations: 1
+  baseline: revolve
+  individuals_per_generation: 2
+few_shot:
+  mutation: 1
+  crossover: 2
+data_paths:
+  log: true
+  run: 10
+  output_logs: ${root_dir}/logs/${evolution.baseline}/${data_paths.run}
+environment:
+  name: HumanoidEnv

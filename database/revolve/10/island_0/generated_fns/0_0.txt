@@ -1,0 +1,171 @@
+def compute_reward(observation: np.ndarray) -> Tuple[float, Dict[str, float]]:
+    # -----------------------------
+    # Unpack key observable terms
+    # -----------------------------
+    # position indices: 0..(nq-1) ; here we rely only on documented indices
+    torso_z = observation[0]          # z-position of torso
+    torso_vx = observation[22]        # x-velocity of torso
+    torso_vy = observation[23]        # y-velocity of torso
+    torso_vz = observation[24]        # z-velocity of torso
+
+    # orientation (unit quaternion-like, but we don't assume normalization)
+    torso_orient_x = observation[1]
+    torso_orient_y = observation[2]
+
+    # joint angles
+    right_knee_angle = observation[11]
+    left_knee_angle = observation[15]
+    right_hip_y = observation[10]
+    left_hip_y = observation[14]
+
+    # angular velocities of joints (already provided separate from torso)
+    right_knee_vel = observation[34]
+    left_knee_vel = observation[38]
+    right_hip_y_vel = observation[33]
+    left_hip_y_vel = observation[37]
+
+    # torso angular velocities
+    torso_ang_vel = observation[25:28]  # [wx, wy, wz]
+
+    # all generalized velocities (for smoothness)
+    qvel = observation[24:47]
+
+    # actuator forces (proxy for energy / effort)
+    actuator_forces = observation[271:294]
+
+    # external contact forces (proxy for impact / harsh contacts)
+    external_forces = observation[294:378]
+
+    # -----------------------------
+    # 1. Forward running speed
+    # -----------------------------
+    # Encourage positive x velocity, penalize backward motion.
+    # Use a soft-saturated exponential transform to keep reward bounded.
+    speed_temp = 0.4  # higher => more sensitive to speed
+    forward_speed_raw = torso_vx
+
+    # Map speed to (0, 1): near 0 m/s -> ~0.37, 4 m/s -> ~0.94
+    forward_speed_reward = np.exp(forward_speed_raw * speed_temp)
+    # normalize to ~[0, 1] around reasonable speed range
+    forward_speed_reward /= (1.0 + forward_speed_reward)
+
+    # Penalize backward motion explicitly (linear, unbounded negative)
+    backward_penalty = 0.0
+    if torso_vx < 0.0:
+        backward_penalty = torso_vx  # negative
+
+    # -----------------------------
+    # 2. Healthy height (stay upright)
+    # -----------------------------
+    # Healthy range for torso z: [1.0, 2.0]
+    # We smoothly reward being inside and close to mid-height 1.5.
+    height_temp = 6.0
+    target_z = 1.5
+    dz = torso_z - target_z
+    # Gaussian-shaped reward around target height, in (0, 1]
+    height_reward = np.exp(-height_temp * dz * dz)
+
+    # -----------------------------
+    # 3. Uprightness and heading stability
+    # -----------------------------
+    # Encourage torso to be roughly upright: penalize large pitch/roll (x,y orientation).
+    # We use squared deviation around 0 for both.
+    posture_temp = 3.0
+    posture_deviation = torso_orient_x**2 + torso_orient_y**2
+    upright_reward = np.exp(-posture_temp * posture_deviation)  # (0,1]
+
+    # Reduce fast torso rotations (for smoother, human-like motion)
+    ang_vel_temp = 0.08
+    torso_ang_vel_norm_sq = np.sum(torso_ang_vel**2)
+    torso_stability_reward = np.exp(-ang_vel_temp * torso_ang_vel_norm_sq)  # (0,1]
+
+    # -----------------------------
+    # 4. Gait symmetry and leg usage
+    # -----------------------------
+    # Encourage symmetric left/right leg motion for more human-like gait.
+    gait_sym_temp = 0.25
+    # Symmetry in knee and hip y angles
+    knee_sym = (right_knee_angle + left_knee_angle)**2  # want left ≈ -right for running
+    hip_sym = (right_hip_y + left_hip_y)**2
+
+    # Symmetry in velocities
+    knee_vel_sym = (right_knee_vel + left_knee_vel)**2
+    hip_vel_sym = (right_hip_y_vel + left_hip_y_vel)**2
+
+    gait_symmetry_measure = knee_sym + hip_sym + 0.1 * (knee_vel_sym + hip_vel_sym)
+    gait_symmetry_reward = np.exp(-gait_sym_temp * gait_symmetry_measure)  # (0,1]
+
+    # -----------------------------
+    # 5. Smooth, low-effort motion
+    # -----------------------------
+    # Penalize very large velocities (jerky motion).
+    vel_smooth_temp = 0.01
+    vel_norm_sq = np.sum(qvel**2)
+    smooth_motion_reward = np.exp(-vel_smooth_temp * vel_norm_sq)  # (0,1]
+
+    # Encourage low actuator forces (energy efficiency).
+    effort_temp = 0.0005
+    effort_norm_sq = np.sum(actuator_forces**2)
+    effort_reward = np.exp(-effort_temp * effort_norm_sq)  # (0,1]
+
+    # -----------------------------
+    # 6. Soft-contact / impact penalty
+    # -----------------------------
+    # Penalize very large ground reaction forces to avoid slamming feet/arms.
+    impact_temp = 0.0003
+    impact_norm_sq = np.sum(external_forces**2)
+    impact_reward = np.exp(-impact_temp * impact_norm_sq)  # (0,1]
+
+    # -----------------------------
+    # Combine into final reward
+    # -----------------------------
+    # Positive components (all in ~[0,1]):
+    #   - forward_speed_reward
+    #   - height_reward
+    #   - upright_reward
+    #   - torso_stability_reward
+    #   - gait_symmetry_reward
+    #   - smooth_motion_reward
+    #   - effort_reward
+    #   - impact_reward
+    #
+    # Negative component:
+    #   - backward_penalty (<=0)
+    #
+    # We take a weighted sum and keep it roughly in a sensible range.
+    w_speed = 3.0
+    w_height = 1.0
+    w_upright = 0.7
+    w_torso_stab = 0.7
+    w_gait_sym = 1.0
+    w_smooth = 0.5
+    w_effort = 0.5
+    w_impact = 0.5
+    w_backward = 1.5
+
+    total_reward = (
+        w_speed * forward_speed_reward
+        + w_height * height_reward
+        + w_upright * upright_reward
+        + w_torso_stab * torso_stability_reward
+        + w_gait_sym * gait_symmetry_reward
+        + w_smooth * smooth_motion_reward
+        + w_effort * effort_reward
+        + w_impact * impact_reward
+        + w_backward * backward_penalty
+    )
+
+    components: Dict[str, float] = {
+        "forward_speed_reward": float(forward_speed_reward),
+        "backward_penalty": float(backward_penalty),
+        "height_reward": float(height_reward),
+        "upright_reward": float(upright_reward),
+        "torso_stability_reward": float(torso_stability_reward),
+        "gait_symmetry_reward": float(gait_symmetry_reward),
+        "smooth_motion_reward": float(smooth_motion_reward),
+        "effort_reward": float(effort_reward),
+        "impact_reward": float(impact_reward),
+        "total_reward": float(total_reward),
+    }
+
+    return float(total_reward), components

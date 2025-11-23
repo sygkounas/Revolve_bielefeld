@@ -308,18 +308,37 @@ def save_human_feedback(
 
 
 def format_human_feedback(human_feedback: str) -> str:
-    pos_feedback, neg_feedback = human_feedback.split("\n")
-    pos_feedback.replace("&&", "&")
-    neg_feedback.replace("&&", "&")
-    final_str = ""
-    if pos_feedback != "":
-        final_str += f"The satisfactory aspects are {pos_feedback}."
-    if neg_feedback != "":
-        final_str += f"Aspects that need improvement are {neg_feedback}."
-    return final_str
+    lines = [x.strip() for x in human_feedback.split("\n") if x.strip()]
+
+    # Extract sections by headers
+    pos = ""
+    neg = ""
+
+    current = None
+    for line in lines:
+        if line.lower().startswith("positive"):
+            current = "pos"
+            continue
+        if line.lower().startswith("negative"):
+            current = "neg"
+            continue
+
+        if current == "pos":
+            pos = line
+        elif current == "neg":
+            neg = line
+
+    final = ""
+    if pos:
+        final += f"The satisfactory aspects are {pos}. "
+    if neg:
+        final += f"Aspects that need improvement are {neg}."
+
+    return final.strip()
 
 
-def serialize_dict(dictionary, num_elements=10):
+
+def serialize_dict(dictionary, num_elements=50):
     ret_str = ""
     for key, values in dictionary.items():
         if isinstance(values, list) and len(values) > num_elements:
