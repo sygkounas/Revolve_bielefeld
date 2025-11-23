@@ -21,7 +21,7 @@
 ## Setup
 ```shell
 # clone the repository 
-git clone https://github.com/RishiHazra/Revolve.git
+https://github.com/sygkounas/Revolve_bielefeld
 cd Revolve
 conda create -n "revolve" python=3.10
 conda activate revolve
